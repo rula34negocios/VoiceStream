@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Mic, Square, Send, User, Sparkles } from 'lucide-react';
+import { Mic, Square, Send, User, Sparkles, Coins } from 'lucide-react';
 
 export default function SendAudio() {
   const { slug } = useParams();
@@ -19,6 +19,7 @@ export default function SendAudio() {
   // Estado para el límite dinámico de grabación (Tiempo Base + Créditos)
   const [limiteMaximo, setLimiteMaximo] = useState(10);
   const [creditoExtra, setCreditoExtra] = useState(0);
+  const [usuario, setUsuario] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -40,21 +41,18 @@ export default function SendAudio() {
           setCanal(canalData);
           const baseSegundos = canalData.duracion_base_segundos || 10;
           
-          // Verificar si el usuario actual tiene créditos acumulados
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
+            setUsuario(user);
             const { data: perfil } = await supabase
               .from('perfiles')
               .select('credito_segundos')
               .eq('id', user.id)
               .maybeSingle();
 
-            if (perfil?.credito_segundos > 0) {
-              setCreditoExtra(perfil.credito_segundos);
-              setLimiteMaximo(baseSegundos + perfil.credito_segundos);
-            } else {
-              setLimiteMaximo(baseSegundos);
-            }
+            const extra = perfil?.credito_segundos || 0;
+            setCreditoExtra(extra);
+            setLimiteMaximo(baseSegundos + extra);
           } else {
             setLimiteMaximo(baseSegundos);
           }
@@ -67,6 +65,34 @@ export default function SendAudio() {
     }
     obtenerCanalYCreditos();
   }, [slug]);
+
+  // Simular canje de Bits o Puntos del Canal por +10 segundos extra
+  const canjearPuntosPorTiempo = async () => {
+    if (!usuario) {
+      alert('Debes iniciar sesión para canjear tiempo extra.');
+      return;
+    }
+
+    const nuevoExtra = creditoExtra + 10;
+    const baseSegundos = canal.duracion_base_segundos || 10;
+
+    try {
+      const { error } = await supabase
+        .from('perfiles')
+        .update({ credito_segundos: nuevoExtra })
+        .eq('id', usuario.id);
+
+      if (error) throw error;
+
+      setCreditoExtra(nuevoExtra);
+      setLimiteMaximo(baseSegundos + nuevoExtra);
+      setMensajeStatus('¡Has canjeado con éxito +10s de grabación!');
+      setTimeout(() => setMensajeStatus(''), 3000);
+    } catch (err) {
+      console.error(err);
+      alert('Error al procesar el canje de puntos.');
+    }
+  };
 
   // Detener Grabación de forma limpia
   const detenerGrabacion = () => {
@@ -128,8 +154,7 @@ export default function SendAudio() {
     setMensajeStatus('');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      if (!usuario) {
         alert('Debes iniciar sesión con Twitch para enviar audios.');
         setEnviando(false);
         return;
@@ -147,11 +172,11 @@ export default function SendAudio() {
         .from('audios')
         .getPublicUrl(nombreArchivo);
 
-      // 2. Crear registro en la tabla de audios (Atrapa el error Anti-Spam del Trigger)
+      // 2. Crear registro en la tabla de audios
       const { error: dbError } = await supabase.from('audios').insert([
         {
           canal_id: canal.id,
-          usuario_id: user.id,
+          usuario_id: usuario.id,
           titulo: titulo.trim() || 'Anónimo',
           url_archivo: urlData.publicUrl,
           duracion_segundos: duracion,
@@ -168,12 +193,12 @@ export default function SendAudio() {
         throw dbError;
       }
 
-      // 3. Si usó créditos de tiempo, reiniciar el acumulado en su perfil
+      // 3. Si usó créditos de tiempo, reiniciar el acumulado en su perfil tras el envío
       if (creditoExtra > 0) {
         await supabase
           .from('perfiles')
           .update({ credito_segundos: 0 })
-          .eq('id', user.id);
+          .eq('id', usuario.id);
         setCreditoExtra(0);
         setLimiteMaximo(canal.duracion_base_segundos || 10);
       }
@@ -192,29 +217,45 @@ export default function SendAudio() {
     }
   };
 
-  if (cargando) return <div className="p-10 text-center">Cargando canal...</div>;
+  if (cargando) return <div className="p-10 text-center text-zinc-400">Cargando canal...</div>;
   if (!canal) return <div className="p-10 text-center text-red-500 font-bold">Canal no encontrado.</div>;
 
   return (
     <div className="min-h-screen bg-brand-dark text-white p-4 flex flex-col items-center justify-center">
-      <div className="w-full max-w-md bg-brand-card p-6 rounded-2xl border border-zinc-800 shadow-xl">
-        <h1 className="text-2xl font-bold text-center mb-1 text-brand-purple">
+      <div className="w-full max-w-md bg-brand-card p-6 rounded-2xl border border-zinc-800 shadow-xl space-y-4">
+        <h1 className="text-2xl font-bold text-center text-brand-purple">
           VoiceStream
         </h1>
-        <p className="text-center text-zinc-400 mb-2 text-sm">
+        <p className="text-center text-zinc-400 text-sm">
           Enviar audio a <span className="text-white font-semibold">{canal.nombre_canal}</span>
         </p>
 
-        {/* Notificación de Tiempo Extendido si tiene Créditos */}
+        {/* Sección de Canje de Puntos / Bits por Tiempo Extra */}
+        <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+              <Coins className="w-4 h-4 text-amber-400" /> Extender Tiempo
+            </span>
+            <p className="text-[11px] text-zinc-400">Canjea Puntos / Bits (+10s)</p>
+          </div>
+          <button
+            onClick={canjearPuntosPorTiempo}
+            className="bg-amber-500 hover:bg-amber-600 text-black text-xs font-bold px-3 py-2 rounded-lg transition"
+          >
+            Canjear (+10s)
+          </button>
+        </div>
+
+        {/* Notificación de Tiempo Extendido Activo */}
         {creditoExtra > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 mb-4">
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
             <Sparkles className="w-4 h-4 shrink-0" />
-            <span>¡Canje de Twitch detectado! +{creditoExtra}s de grabación disponibles.</span>
+            <span>¡Tienes +{creditoExtra}s de grabación extra activos!</span>
           </div>
         )}
 
         {/* Grabador */}
-        <div className="flex flex-col items-center my-6">
+        <div className="flex flex-col items-center my-4">
           {!grabando ? (
             <button
               onClick={iniciarGrabacion}
@@ -231,20 +272,20 @@ export default function SendAudio() {
             </button>
           )}
 
-          <p className="mt-4 text-xl font-mono">
+          <p className="mt-3 text-lg font-mono">
             00:{duracion < 10 ? `0${duracion}` : duracion} / 00:{limiteMaximo < 10 ? `0${limiteMaximo}` : limiteMaximo}
           </p>
         </div>
 
         {/* Previsualización del audio */}
         {audioUrl && (
-          <div className="mb-6 w-full">
+          <div className="w-full">
             <audio src={audioUrl} controls className="w-full rounded-lg" />
           </div>
         )}
 
         {/* Formulario de opciones */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div>
             <label className="block text-xs text-zinc-400 mb-1">Título o Mensaje (Opcional)</label>
             <input
