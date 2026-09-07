@@ -34,72 +34,61 @@ export default function Home() {
 
   const cargarInformacionUsuario = async (user) => {
     try {
-      // 1. Obtener perfil
+      // 1. Obtener perfil para asegurar el ID correcto
       const { data: perfilData } = await supabase
         .from('perfiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
+      
       setPerfil(perfilData);
+
+      // Usar el ID del perfil si existe, sino el de auth
+      const idParaBuscar = perfilData ? perfilData.id : user.id;
 
       // 2. Obtener canal propio
       const { data: canalData } = await supabase
         .from('canales')
         .select('*')
-        .eq('propietario_id', user.id)
+        .eq('propietario_id', idParaBuscar)
         .maybeSingle();
       setMiCanal(canalData);
 
-      // 3. Obtener TODAS las moderaciones del usuario (Aprobadas o Pendientes)
+      // 3. Obtener TODAS las moderaciones del usuario cruzando con la tabla canales
       const { data: modRegistros, error: modError } = await supabase
         .from('canal_moderadores')
-        .select('id, estado, canal_id')
-        .eq('usuario_id', user.id);
+        .select(`
+          id, 
+          estado, 
+          canal_id,
+          canales (id, nombre_canal, slug)
+        `)
+        .eq('usuario_id', idParaBuscar);
 
-      if (modError) console.error("Error al cargar moderaciones:", modError);
+      if (modError) {
+        console.error('Error al cargar moderaciones:', modError);
+        return;
+      }
 
       if (modRegistros && modRegistros.length > 0) {
-        const idsAprobados = modRegistros
-          .filter((m) => m.estado === 'aprobado')
-          .map((m) => m.canal_id);
+        // Extraer los canales aprobados directamente de la relación
+        const aprobados = modRegistros
+          .filter((m) => m.estado === 'aprobado' && m.canales)
+          .map((m) => m.canales);
 
-        const pendientesRaw = modRegistros.filter((m) => m.estado === 'pendiente');
+        // Extraer los canales pendientes directamente de la relación
+        const pendientes = modRegistros
+          .filter((m) => m.estado === 'pendiente' && m.canales)
+          .map((m) => ({ ...m, canales: m.canales }));
 
-        // Cargar datos de los canales aprobados
-        if (idsAprobados.length > 0) {
-          const { data: canalesAprobados } = await supabase
-            .from('canales')
-            .select('id, nombre_canal, slug')
-            .in('id', idsAprobados);
-
-          setCanalesMod(canalesAprobados || []);
-        } else {
-          setCanalesMod([]);
-        }
-
-        // Cargar datos de los canales pendientes
-        if (pendientesRaw.length > 0) {
-          const idsPendientes = pendientesRaw.map((m) => m.canal_id);
-          const { data: canalesPendientes } = await supabase
-            .from('canales')
-            .select('id, nombre_canal, slug')
-            .in('id', idsPendientes);
-
-          const pendientesMapeados = pendientesRaw.map((p) => ({
-            ...p,
-            canales: canalesPendientes?.find((c) => c.id === p.canal_id)
-          }));
-
-          setInvitacionesPendientes(pendientesMapeados);
-        } else {
-          setInvitacionesPendientes([]);
-        }
+        setCanalesMod(aprobados);
+        setInvitacionesPendientes(pendientes);
       } else {
         setCanalesMod([]);
         setInvitacionesPendientes([]);
       }
     } catch (err) {
-      console.error('Error cargando usuario:', err);
+      console.error('Error general cargando usuario:', err);
     }
   };
 
