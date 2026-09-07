@@ -12,10 +12,9 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/invitacion/:slug" element={<AcceptInvite />} />
-      <Route path="/:slug" element={<SendAudio />} />
       <Route path="/:slug/mod" element={<Moderation />} />
       <Route path="/:slug/overlay" element={<Overlay />} />
-      {/* Redirección por defecto si la ruta no existe */}
+      <Route path="/:slug" element={<SendAudio />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
