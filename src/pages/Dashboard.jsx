@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Radio, Copy, Check, LogIn, ExternalLink, ShieldCheck, UserCheck, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Radio, Copy, Check, LogIn, ExternalLink, ShieldCheck, UserCheck, Eye, EyeOff, AlertTriangle, Sparkles, Trash2, Plus } from 'lucide-react';
 
 export default function Dashboard() {
   const [usuario, setUsuario] = useState(null);
   const [canal, setCanal] = useState(null);
   const [moderadores, setModeradores] = useState([]);
+  const [paquetes, setPaquetes] = useState([]);
   const [nombreCanal, setNombreCanal] = useState('');
   const [slug, setSlug] = useState('');
   const [copiado, setCopiado] = useState('');
   const [cargando, setCargando] = useState(true);
-  const [mostrarEnlaceMod, setMostrarEnlaceMod] = useState(false); // Estado para ocultar/mostrar
+  const [mostrarEnlaceMod, setMostrarEnlaceMod] = useState(false);
+
+  // Estados para crear paquetes de tiempo
+  const [nuevoSegundos, setNuevoSegundos] = useState('');
+  const [nuevoCosto, setNuevoCosto] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -34,6 +39,7 @@ export default function Dashboard() {
       if (canalData) {
         setCanal(canalData);
         await cargarModeradores(canalData.id);
+        await cargarPaquetes(canalData.id);
       }
     } catch (err) {
       console.error(err);
@@ -53,6 +59,48 @@ export default function Dashboard() {
       .eq('canal_id', canalId);
 
     if (data) setModeradores(data);
+  };
+
+  const cargarPaquetes = async (canalId) => {
+    const { data } = await supabase
+      .from('canal_paquetes_tiempo')
+      .select('*')
+      .eq('canal_id', canalId)
+      .order('segundos', { ascending: true });
+
+    if (data) setPaquetes(data);
+  };
+
+  const crearPaquete = async (e) => {
+    e.preventDefault();
+    if (!nuevoSegundos || !nuevoCosto || !canal) return;
+
+    const { error } = await supabase.from('canal_paquetes_tiempo').insert([
+      {
+        canal_id: canal.id,
+        segundos: parseInt(nuevoSegundos),
+        costo_puntos: parseInt(nuevoCosto)
+      }
+    ]);
+
+    if (!error) {
+      setNuevoSegundos('');
+      setNuevoCosto('');
+      await cargarPaquetes(canal.id);
+    } else {
+      alert('Error al crear el paquete.');
+    }
+  };
+
+  const eliminarPaquete = async (paqueteId) => {
+    const { error } = await supabase
+      .from('canal_paquetes_tiempo')
+      .delete()
+      .eq('id', paqueteId);
+
+    if (!error && canal) {
+      await cargarPaquetes(canal.id);
+    }
   };
 
   const iniciarSesionTwitch = () => {
@@ -78,6 +126,7 @@ export default function Dashboard() {
       alert('Error al crear el canal: ' + error.message);
     } else if (data) {
       setCanal(data);
+      await cargarPaquetes(data.id);
     }
   };
 
@@ -189,7 +238,54 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* SECCIÓN DE INVITACIÓN A MODERADORES (OCULTO POR SEGURIDAD) */}
+            {/* CONFIGURACIÓN DE PAQUETES DE TIEMPO POR PUNTOS */}
+            <div className="border-t border-zinc-800 pt-6 space-y-4">
+              <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-brand-purple" /> Configurar Opciones de Puntos por Tiempo
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Añade paquetes para que tus espectadores sepan cuántos puntos cuesta canjear segundos adicionales.
+              </p>
+
+              <form onSubmit={crearPaquete} className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Segundos (Ej: 15)"
+                  value={nuevoSegundos}
+                  onChange={(e) => setNuevoSegundos(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs flex-1 text-white focus:outline-none focus:border-brand-purple"
+                />
+                <input
+                  type="number"
+                  placeholder="Costo en Puntos (Ej: 300)"
+                  value={nuevoCosto}
+                  onChange={(e) => setNuevoCosto(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs flex-1 text-white focus:outline-none focus:border-brand-purple"
+                />
+                <button type="submit" className="bg-brand-purple hover:bg-brand-accent text-white px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                  <Plus className="w-4 h-4" /> Añadir
+                </button>
+              </form>
+
+              {/* Lista de paquetes creados */}
+              <div className="space-y-2 mt-2">
+                {paquetes.map((pkg) => (
+                  <div key={pkg.id} className="flex items-center justify-between bg-zinc-950 p-3 rounded-lg border border-zinc-800">
+                    <span className="text-xs font-semibold text-zinc-200">
+                      +{pkg.segundos} Segundos de grabación
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-brand-purple font-bold">{pkg.costo_puntos} Puntos</span>
+                      <button onClick={() => eliminarPaquete(pkg.id)} className="text-red-500 hover:text-red-400 p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* SECCIÓN DE INVITACIÓN A MODERADORES */}
             <div className="border-t border-zinc-800 pt-6 space-y-4">
               <div className="bg-amber-950/20 p-4 rounded-xl border border-amber-800/40 space-y-3">
                 <div className="flex items-center justify-between">
@@ -205,13 +301,11 @@ export default function Dashboard() {
                   </button>
                 </div>
 
-                {/* Advertencia de seguridad */}
                 <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg text-amber-200 text-[11px]">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <span><strong>Advertencia:</strong> No muestres este enlace en directo. Cualquier persona que entre podrá registrarse como moderador de tu canal.</span>
                 </div>
 
-                {/* Input condicional (Oculto o Visible) */}
                 <div className="flex gap-2">
                   <input
                     type={mostrarEnlaceMod ? "text" : "password"}
