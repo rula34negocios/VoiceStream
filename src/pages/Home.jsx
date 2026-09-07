@@ -34,36 +34,68 @@ export default function Home() {
 
   const cargarInformacionUsuario = async (user) => {
     try {
-      const { data: perfilData } = await supabase.from('perfiles').select('*').eq('id', user.id).maybeSingle();
+      // 1. Obtener perfil
+      const { data: perfilData } = await supabase
+        .from('perfiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
       setPerfil(perfilData);
 
-      const { data: canalData } = await supabase.from('canales').select('*').eq('propietario_id', user.id).maybeSingle();
+      // 2. Obtener canal propio
+      const { data: canalData } = await supabase
+        .from('canales')
+        .select('*')
+        .eq('propietario_id', user.id)
+        .maybeSingle();
       setMiCanal(canalData);
 
-      // Cargar invitaciones de moderación activas o aprobadas
-      const { data: modData } = await supabase
+      // 3. Cargar moderaciones vinculando correctamente la relación con la tabla 'canales'
+      const { data: modData, error: modError } = await supabase
         .from('canal_moderadores')
         .select(`
           id,
           estado,
-          canales:canal_id (id, nombre_canal, slug)
+          canal_id,
+          canales (
+            id,
+            nombre_canal,
+            slug
+          )
         `)
         .eq('usuario_id', user.id);
 
+      if (modError) {
+        console.error('Error al cargar moderaciones:', modError);
+        return;
+      }
+
       if (modData) {
-        const aprobados = modData.filter(m => m.estado === 'aprobado').map(m => m.canales);
-        const pendientes = modData.filter(m => m.estado === 'pendiente');
+        // Filtrar y extrae los canales aprobados asegurando que la relación no venga nula
+        const aprobados = modData
+          .filter((m) => m.estado === 'aprobado' && m.canales)
+          .map((m) => m.canales);
+
+        // Filtrar invitaciones pendientes
+        const pendientes = modData.filter((m) => m.estado === 'pendiente');
+
         setCanalesMod(aprobados);
         setInvitacionesPendientes(pendientes);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Error cargando usuario:', err);
     }
   };
 
   const aceptarInvitacion = async (invitacionId, slug) => {
-    await supabase.from('canal_moderadores').update({ estado: 'aprobado' }).eq('id', invitacionId);
-    navigate(`/${slug}/mod`);
+    const { error } = await supabase
+      .from('canal_moderadores')
+      .update({ estado: 'aprobado' })
+      .eq('id', invitacionId);
+
+    if (!error) {
+      navigate(`/${slug}/mod`);
+    }
   };
 
   const iniciarSesionConTwitch = () => {
@@ -86,7 +118,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-brand-dark text-white flex flex-col justify-between p-6">
       <header className="max-w-5xl mx-auto w-full flex justify-between items-center py-4 border-b border-zinc-800">
-        <div onClick={() => navigate('/')} className="flex items-center gap-2 text-xl font-bold text-brand-purple cursor-pointer">
+        <div onClick={() => navigate('/')} className="flex items-center gap-2 text-xl font-bold text-brand-purple cursor-pointer select-none">
           <Radio className="w-6 h-6" /> VoiceStream
         </div>
 
@@ -96,46 +128,50 @@ export default function Home() {
           </button>
         ) : (
           <div className="relative" ref={menuRef}>
-            <button onClick={() => setMenuAbierto(!menuAbierto)} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-full">
-              <img src={perfil?.avatar_url || usuario.user_metadata?.avatar_url} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
+            <button onClick={() => setMenuAbierto(!menuAbierto)} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 hover:border-brand-purple/50 px-3 py-1.5 rounded-full transition">
+              <img src={perfil?.avatar_url || usuario.user_metadata?.avatar_url || 'https://via.placeholder.com/40'} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-purple-500/40" />
               <span className="text-sm font-bold text-zinc-200">{perfil?.twitch_username || usuario.user_metadata?.name}</span>
               <ChevronDown className="w-4 h-4 text-zinc-400" />
             </button>
 
             {menuAbierto && (
               <div className="absolute right-0 mt-2 w-64 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-50 space-y-1">
-                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-zinc-500">Administración</div>
+                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Administración</div>
                 {miCanal ? (
-                  <button onClick={() => { setMenuAbierto(false); navigate('/dashboard'); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl">
+                  <button onClick={() => { setMenuAbierto(false); navigate('/dashboard'); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl transition">
                     <LayoutDashboard className="w-4 h-4 text-purple-400" /> Dashboard de {miCanal.nombre_canal}
                   </button>
                 ) : (
-                  <button onClick={() => { setMenuAbierto(false); navigate('/dashboard'); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-brand-purple hover:bg-purple-500/10 rounded-xl">
+                  <button onClick={() => { setMenuAbierto(false); navigate('/dashboard'); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-brand-purple hover:bg-purple-500/10 rounded-xl transition">
                     <PlusCircle className="w-4 h-4" /> Crear mi Canal de Audios
                   </button>
                 )}
 
                 <div className="border-t border-zinc-900 my-1"></div>
 
-                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-zinc-500">Moderación</div>
+                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Moderación</div>
                 
-                {/* SI SOY DUEÑO DE MI CANAL, MUESTRA ACCESO A MI PROPIO PANEL DE MODERACIÓN */}
+                {/* SI SOY DUEÑO DE MI CANAL, MUESTRA ACCESO A MI PROPIO PANEL */}
                 {miCanal && (
-                  <button onClick={() => { setMenuAbierto(false); navigate(`/${miCanal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl">
+                  <button onClick={() => { setMenuAbierto(false); navigate(`/${miCanal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl transition">
                     <Shield className="w-4 h-4 text-purple-400" /> Moderar {miCanal.nombre_canal} (Mío)
                   </button>
                 )}
 
                 {/* CANALES DONDE SOY MODERADOR INVITADO */}
-                {canalesMod.map((canal) => (
-                  <button key={canal.slug} onClick={() => { setMenuAbierto(false); navigate(`/${canal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl">
-                    <Shield className="w-4 h-4 text-green-400" /> Moderar {canal.nombre_canal}
-                  </button>
-                ))}
+                {canalesMod.length > 0 ? (
+                  canalesMod.map((canal) => (
+                    <button key={canal.slug} onClick={() => { setMenuAbierto(false); navigate(`/${canal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl transition">
+                      <Shield className="w-4 h-4 text-green-400" /> Moderar {canal.nombre_canal}
+                    </button>
+                  ))
+                ) : (
+                  !miCanal && <div className="px-3 py-1 text-[11px] text-zinc-500 italic">No moderas ningún canal aún.</div>
+                )}
 
                 <div className="border-t border-zinc-900 my-1"></div>
 
-                <button onClick={cerrarSesion} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-xl">
+                <button onClick={cerrarSesion} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-xl transition">
                   <LogOut className="w-4 h-4" /> Cerrar Sesión
                 </button>
               </div>
@@ -154,7 +190,7 @@ export default function Home() {
             {invitacionesPendientes.map((inv) => (
               <div key={inv.id} className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                 <span className="text-xs text-zinc-200 font-semibold">{inv.canales?.nombre_canal}</span>
-                <button onClick={() => aceptarInvitacion(inv.id, inv.canales?.slug)} className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold">
+                <button onClick={() => aceptarInvitacion(inv.id, inv.canales?.slug)} className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">
                   Aceptar e ir a Moderación
                 </button>
               </div>
