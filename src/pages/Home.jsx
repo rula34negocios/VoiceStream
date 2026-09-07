@@ -50,27 +50,22 @@ export default function Home() {
         .maybeSingle();
       setMiCanal(canalData);
 
-      // 3. Obtener registros de moderación directamente de canal_moderadores
+      // 3. Obtener TODAS las moderaciones del usuario (Aprobadas o Pendientes)
       const { data: modRegistros, error: modError } = await supabase
         .from('canal_moderadores')
         .select('id, estado, canal_id')
         .eq('usuario_id', user.id);
 
-      if (modError) {
-        console.error('Error al cargar moderaciones:', modError);
-        return;
-      }
+      if (modError) console.error("Error al cargar moderaciones:", modError);
 
       if (modRegistros && modRegistros.length > 0) {
-        // IDs de canales aprobados
         const idsAprobados = modRegistros
           .filter((m) => m.estado === 'aprobado')
           .map((m) => m.canal_id);
 
-        // IDs de invitaciones pendientes
         const pendientesRaw = modRegistros.filter((m) => m.estado === 'pendiente');
 
-        // Consultar los canales aprobados de forma independiente
+        // Cargar datos de los canales aprobados
         if (idsAprobados.length > 0) {
           const { data: canalesAprobados } = await supabase
             .from('canales')
@@ -82,7 +77,7 @@ export default function Home() {
           setCanalesMod([]);
         }
 
-        // Consultar los canales de invitaciones pendientes para la tarjeta
+        // Cargar datos de los canales pendientes
         if (pendientesRaw.length > 0) {
           const idsPendientes = pendientesRaw.map((m) => m.canal_id);
           const { data: canalesPendientes } = await supabase
