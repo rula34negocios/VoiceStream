@@ -10,6 +10,7 @@ export default function Home() {
   const [canalesMod, setCanalesMod] = useState([]);
   const [invitacionesPendientes, setInvitacionesPendientes] = useState([]);
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
   const menuRef = useRef(null);
   const navigate = useNavigate();
@@ -26,6 +27,8 @@ export default function Home() {
       if (session?.user) {
         setUsuario(session.user);
         await cargarInformacionUsuario(session.user);
+      } else {
+        setCargando(false);
       }
     });
 
@@ -34,61 +37,70 @@ export default function Home() {
 
   const cargarInformacionUsuario = async (user) => {
     try {
-      // 1. Obtener perfil para asegurar el ID correcto
+      // 1. Obtener perfil
       const { data: perfilData } = await supabase
         .from('perfiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
-      
       setPerfil(perfilData);
-
-      // Usar el ID del perfil si existe, sino el de auth
-      const idParaBuscar = perfilData ? perfilData.id : user.id;
 
       // 2. Obtener canal propio
       const { data: canalData } = await supabase
         .from('canales')
         .select('*')
-        .eq('propietario_id', idParaBuscar)
+        .eq('propietario_id', user.id)
         .maybeSingle();
       setMiCanal(canalData);
 
-      // 3. Obtener TODAS las moderaciones del usuario cruzando con la tabla canales
-      const { data: modRegistros, error: modError } = await supabase
+      // 3. OBTENER MODERACIONES (SOLUCIÓN DEFINITIVA: SIN JOINS ANIDADOS)
+      // Primero buscamos solo los IDs para evitar fallos de relación en Supabase
+      const { data: modsData, error: modsError } = await supabase
         .from('canal_moderadores')
-        .select(`
-          id, 
-          estado, 
-          canal_id,
-          canales (id, nombre_canal, slug)
-        `)
-        .eq('usuario_id', idParaBuscar);
+        .select('id, estado, canal_id')
+        .eq('usuario_id', user.id);
 
-      if (modError) {
-        console.error('Error al cargar moderaciones:', modError);
-        return;
+      if (modsError) {
+        console.error('Error cargando moderadores:', modsError);
       }
 
-      if (modRegistros && modRegistros.length > 0) {
-        // Extraer los canales aprobados directamente de la relación
-        const aprobados = modRegistros
-          .filter((m) => m.estado === 'aprobado' && m.canales)
-          .map((m) => m.canales);
+      const mods = modsData || [];
+      const idsAprobados = mods.filter(m => m.estado === 'aprobado').map(m => m.canal_id);
+      const pendientesRaw = mods.filter(m => m.estado === 'pendiente');
 
-        // Extraer los canales pendientes directamente de la relación
-        const pendientes = modRegistros
-          .filter((m) => m.estado === 'pendiente' && m.canales)
-          .map((m) => ({ ...m, canales: m.canales }));
-
-        setCanalesMod(aprobados);
-        setInvitacionesPendientes(pendientes);
+      // 4. Si hay canales aprobados, buscamos sus nombres con una consulta independiente
+      if (idsAprobados.length > 0) {
+        const { data: canalesAprobados } = await supabase
+          .from('canales')
+          .select('id, nombre_canal, slug')
+          .in('id', idsAprobados);
+        
+        setCanalesMod(canalesAprobados || []);
       } else {
         setCanalesMod([]);
+      }
+
+      // 5. Si hay invitaciones pendientes, buscamos sus nombres de la misma manera
+      if (pendientesRaw.length > 0) {
+        const idsPend = pendientesRaw.map(m => m.canal_id);
+        const { data: canalesPendientes } = await supabase
+          .from('canales')
+          .select('id, nombre_canal, slug')
+          .in('id', idsPend);
+
+        const filtrados = pendientesRaw.map(p => ({
+          ...p,
+          canales: (canalesPendientes || []).find(c => c.id === p.canal_id)
+        }));
+        setInvitacionesPendientes(filtrados);
+      } else {
         setInvitacionesPendientes([]);
       }
+
     } catch (err) {
       console.error('Error general cargando usuario:', err);
+    } finally {
+      setCargando(false);
     }
   };
 
