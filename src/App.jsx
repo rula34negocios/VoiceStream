@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import SendAudio from './pages/SendAudio';
@@ -15,6 +15,8 @@ export default function App() {
       <Route path="/:slug" element={<SendAudio />} />
       <Route path="/:slug/mod" element={<Moderation />} />
       <Route path="/:slug/overlay" element={<Overlay />} />
+      {/* Redirección por defecto si la ruta no existe */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
