@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Check, X, Shield, Trash2, UserPlus, Volume2, Star, Heart, Play } from 'lucide-react';
+import { Check, X, Shield, Trash2, UserPlus, Volume2, Star, Heart, Play, Home } from 'lucide-react';
 
 export default function Moderation() {
+  const navigate = useNavigate();
   const { slug } = useParams();
+  
   const [canal, setCanal] = useState(null);
   const [audios, setAudios] = useState([]);
   const [favoritos, setFavoritos] = useState([]);
@@ -137,7 +139,6 @@ export default function Moderation() {
     setFavoritos((prev) => prev.filter((f) => f.id !== favId));
   };
 
-  // Enviar audio guardado directamente al OBS Overlay
   const enviarFavoritoAObs = async (fav) => {
     if (!canal || !usuarioActual) return;
 
@@ -157,7 +158,7 @@ export default function Moderation() {
       alert(`¡"${fav.titulo}" se está reproduciendo en OBS!`);
     } else {
       console.error(error);
-      alert('Error al enviar el audio a OBS. Ejecuta el script SQL de permisos en Supabase.');
+      alert('Error al enviar el audio a OBS.');
     }
   };
 
@@ -238,12 +239,22 @@ export default function Moderation() {
           </div>
         )}
 
+        {/* Encabezado con Botón de Inicio */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-          <div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-2 rounded-xl border border-zinc-800 text-xs font-semibold transition"
+            >
+              <Home className="w-4 h-4 text-brand-purple" />
+              <span>Inicio</span>
+            </button>
+
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Shield className="text-brand-purple" /> Moderación: {canal.nombre_canal}
             </h1>
           </div>
+
           <button
             onClick={() => setVerFavoritosTab(!verFavoritosTab)}
             className="bg-zinc-800 hover:bg-zinc-700 text-amber-400 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition"

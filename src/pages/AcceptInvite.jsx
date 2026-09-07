@@ -14,7 +14,6 @@ export default function AcceptInvite() {
   useEffect(() => {
     async function cargarDatos() {
       try {
-        // 1. Obtener canal por el slug
         const { data: canalData, error } = await supabase
           .from('canales')
           .select('*')
@@ -27,7 +26,6 @@ export default function AcceptInvite() {
         }
         setCanal(canalData);
 
-        // 2. Verificar usuario autenticado
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setUsuario(user);
@@ -53,7 +51,6 @@ export default function AcceptInvite() {
     setCargando(true);
 
     try {
-      // Registrar al usuario como moderador
       const { error } = await supabase
         .from('canal_moderadores')
         .upsert({
@@ -64,8 +61,8 @@ export default function AcceptInvite() {
 
       if (error) throw error;
 
-      // Redirigir directamente al panel de moderación del canal
-      navigate(`/${canal.slug}/mod`);
+      // Redirección reemplazando la entrada actual para actualizar el contexto de rutas
+      navigate(`/${canal.slug}/mod`, { replace: true });
     } catch (err) {
       console.error(err);
       alert('Ocurrió un error al aceptar la invitación.');
@@ -74,7 +71,7 @@ export default function AcceptInvite() {
     }
   };
 
-  if (cargando) return <div className="p-10 text-center text-zinc-400">Cargando invitación...</div>;
+  if (cargando) return <div className="min-h-screen bg-brand-dark text-white flex items-center justify-center p-4">Cargando invitación...</div>;
 
   return (
     <div className="min-h-screen bg-brand-dark text-white p-4 flex flex-col items-center justify-center">

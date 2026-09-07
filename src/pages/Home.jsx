@@ -50,19 +50,10 @@ export default function Home() {
         .maybeSingle();
       setMiCanal(canalData);
 
-      // 3. Cargar moderaciones vinculando correctamente la relación con la tabla 'canales'
-      const { data: modData, error: modError } = await supabase
+      // 3. Obtener registros de moderación directamente de canal_moderadores
+      const { data: modRegistros, error: modError } = await supabase
         .from('canal_moderadores')
-        .select(`
-          id,
-          estado,
-          canal_id,
-          canales (
-            id,
-            nombre_canal,
-            slug
-          )
-        `)
+        .select('id, estado, canal_id')
         .eq('usuario_id', user.id);
 
       if (modError) {
@@ -70,17 +61,47 @@ export default function Home() {
         return;
       }
 
-      if (modData) {
-        // Filtrar y extrae los canales aprobados asegurando que la relación no venga nula
-        const aprobados = modData
-          .filter((m) => m.estado === 'aprobado' && m.canales)
-          .map((m) => m.canales);
+      if (modRegistros && modRegistros.length > 0) {
+        // IDs de canales aprobados
+        const idsAprobados = modRegistros
+          .filter((m) => m.estado === 'aprobado')
+          .map((m) => m.canal_id);
 
-        // Filtrar invitaciones pendientes
-        const pendientes = modData.filter((m) => m.estado === 'pendiente');
+        // IDs de invitaciones pendientes
+        const pendientesRaw = modRegistros.filter((m) => m.estado === 'pendiente');
 
-        setCanalesMod(aprobados);
-        setInvitacionesPendientes(pendientes);
+        // Consultar los canales aprobados de forma independiente
+        if (idsAprobados.length > 0) {
+          const { data: canalesAprobados } = await supabase
+            .from('canales')
+            .select('id, nombre_canal, slug')
+            .in('id', idsAprobados);
+
+          setCanalesMod(canalesAprobados || []);
+        } else {
+          setCanalesMod([]);
+        }
+
+        // Consultar los canales de invitaciones pendientes para la tarjeta
+        if (pendientesRaw.length > 0) {
+          const idsPendientes = pendientesRaw.map((m) => m.canal_id);
+          const { data: canalesPendientes } = await supabase
+            .from('canales')
+            .select('id, nombre_canal, slug')
+            .in('id', idsPendientes);
+
+          const pendientesMapeados = pendientesRaw.map((p) => ({
+            ...p,
+            canales: canalesPendientes?.find((c) => c.id === p.canal_id)
+          }));
+
+          setInvitacionesPendientes(pendientesMapeados);
+        } else {
+          setInvitacionesPendientes([]);
+        }
+      } else {
+        setCanalesMod([]);
+        setInvitacionesPendientes([]);
       }
     } catch (err) {
       console.error('Error cargando usuario:', err);
@@ -151,14 +172,14 @@ export default function Home() {
 
                 <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Moderación</div>
                 
-                {/* SI SOY DUEÑO DE MI CANAL, MUESTRA ACCESO A MI PROPIO PANEL */}
+                {/* Canal propio si existe */}
                 {miCanal && (
                   <button onClick={() => { setMenuAbierto(false); navigate(`/${miCanal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl transition">
                     <Shield className="w-4 h-4 text-purple-400" /> Moderar {miCanal.nombre_canal} (Mío)
                   </button>
                 )}
 
-                {/* CANALES DONDE SOY MODERADOR INVITADO */}
+                {/* Canales donde fue invitado y está aprobado */}
                 {canalesMod.length > 0 ? (
                   canalesMod.map((canal) => (
                     <button key={canal.slug} onClick={() => { setMenuAbierto(false); navigate(`/${canal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl transition">
@@ -180,7 +201,7 @@ export default function Home() {
         )}
       </header>
 
-      {/* TARJETA DE INVITACIÓN PENDIENTE EN EL HOME */}
+      {/* TARJETA DE INVITACIÓN PENDIENTE */}
       <main className="max-w-3xl mx-auto text-center my-auto space-y-6 py-8">
         {invitacionesPendientes.length > 0 && (
           <div className="bg-purple-950/40 border border-purple-500/50 p-4 rounded-2xl max-w-md mx-auto text-left mb-6 space-y-3 shadow-lg">
