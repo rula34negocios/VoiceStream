@@ -37,7 +37,6 @@ export default function Home() {
 
   const cargarInformacionUsuario = async (user) => {
     try {
-      // 1. Obtener perfil
       const { data: perfilData } = await supabase
         .from('perfiles')
         .select('*')
@@ -45,7 +44,6 @@ export default function Home() {
         .maybeSingle();
       setPerfil(perfilData);
 
-      // 2. Obtener canal propio
       const { data: canalData } = await supabase
         .from('canales')
         .select('*')
@@ -53,11 +51,10 @@ export default function Home() {
         .maybeSingle();
       setMiCanal(canalData);
 
-      // 3. OBTENER MODERACIONES (SOLUCIÓN DEFINITIVA: SIN JOINS ANIDADOS)
-      // Primero buscamos solo los IDs para evitar fallos de relación en Supabase
+      // ERROR SOLUCIONADO: Se eliminó la petición de la columna 'id' que no existe en canal_moderadores
       const { data: modsData, error: modsError } = await supabase
         .from('canal_moderadores')
-        .select('id, estado, canal_id')
+        .select('estado, canal_id')
         .eq('usuario_id', user.id);
 
       if (modsError) {
@@ -68,7 +65,6 @@ export default function Home() {
       const idsAprobados = mods.filter(m => m.estado === 'aprobado').map(m => m.canal_id);
       const pendientesRaw = mods.filter(m => m.estado === 'pendiente');
 
-      // 4. Si hay canales aprobados, buscamos sus nombres con una consulta independiente
       if (idsAprobados.length > 0) {
         const { data: canalesAprobados } = await supabase
           .from('canales')
@@ -80,7 +76,6 @@ export default function Home() {
         setCanalesMod([]);
       }
 
-      // 5. Si hay invitaciones pendientes, buscamos sus nombres de la misma manera
       if (pendientesRaw.length > 0) {
         const idsPend = pendientesRaw.map(m => m.canal_id);
         const { data: canalesPendientes } = await supabase
@@ -104,14 +99,18 @@ export default function Home() {
     }
   };
 
-  const aceptarInvitacion = async (invitacionId, slug) => {
+  // ERROR SOLUCIONADO: Actualizamos buscando por 'canal_id' y 'usuario_id', no por 'id'
+  const aceptarInvitacion = async (canalId, slug) => {
     const { error } = await supabase
       .from('canal_moderadores')
       .update({ estado: 'aprobado' })
-      .eq('id', invitacionId);
+      .eq('canal_id', canalId)
+      .eq('usuario_id', usuario.id);
 
     if (!error) {
       navigate(`/${slug}/mod`);
+    } else {
+      console.error("Error al aceptar invitación:", error);
     }
   };
 
@@ -168,14 +167,12 @@ export default function Home() {
 
                 <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Moderación</div>
                 
-                {/* Canal propio si existe */}
                 {miCanal && (
                   <button onClick={() => { setMenuAbierto(false); navigate(`/${miCanal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl transition">
                     <Shield className="w-4 h-4 text-purple-400" /> Moderar {miCanal.nombre_canal} (Mío)
                   </button>
                 )}
 
-                {/* Canales donde fue invitado y está aprobado */}
                 {canalesMod.length > 0 ? (
                   canalesMod.map((canal) => (
                     <button key={canal.slug} onClick={() => { setMenuAbierto(false); navigate(`/${canal.slug}/mod`); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900 rounded-xl transition">
@@ -197,7 +194,6 @@ export default function Home() {
         )}
       </header>
 
-      {/* TARJETA DE INVITACIÓN PENDIENTE */}
       <main className="max-w-3xl mx-auto text-center my-auto space-y-6 py-8">
         {invitacionesPendientes.length > 0 && (
           <div className="bg-purple-950/40 border border-purple-500/50 p-4 rounded-2xl max-w-md mx-auto text-left mb-6 space-y-3 shadow-lg">
@@ -205,9 +201,9 @@ export default function Home() {
               <BellCheck className="w-5 h-5 text-purple-400" /> Invitación de Moderación Pendiente
             </div>
             {invitacionesPendientes.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+              <div key={inv.canal_id} className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                 <span className="text-xs text-zinc-200 font-semibold">{inv.canales?.nombre_canal}</span>
-                <button onClick={() => aceptarInvitacion(inv.id, inv.canales?.slug)} className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">
+                <button onClick={() => aceptarInvitacion(inv.canal_id, inv.canales?.slug)} className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">
                   Aceptar e ir a Moderación
                 </button>
               </div>
