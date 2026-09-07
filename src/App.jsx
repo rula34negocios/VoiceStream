@@ -1,26 +1,20 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
-// Importación de Páginas
+import { Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import Dashboard from './pages/Dashboard';
 import SendAudio from './pages/SendAudio';
 import Moderation from './pages/Moderation';
 import Overlay from './pages/Overlay';
-import Dashboard from './pages/Dashboard';
+import AcceptInvite from './pages/AcceptInvite';
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Panel del Streamer */}
-        <Route path="/dashboard" element={<Dashboard />} />
-
-        {/* Rutas por Canal de Streamer */}
-        <Route path="/:slug" element={<SendAudio />} />
-        <Route path="/:slug/mod" element={<Moderation />} />
-        <Route path="/:slug/overlay" element={<Overlay />} />
-
-        {/* Página Principal por defecto */}
-        <Route path="/" element={<Dashboard />} />
-      </Routes>
-    </Router>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/invitacion/:slug" element={<AcceptInvite />} />
+      <Route path="/:slug" element={<SendAudio />} />
+      <Route path="/:slug/mod" element={<Moderation />} />
+      <Route path="/:slug/overlay" element={<Overlay />} />
+    </Routes>
   );
 }
