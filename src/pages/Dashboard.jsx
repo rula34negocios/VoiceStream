@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Radio, Copy, Check, LogIn, ExternalLink, ShieldCheck, UserCheck } from 'lucide-react';
+import { Radio, Copy, Check, LogIn, ExternalLink, ShieldCheck, UserCheck, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
 export default function Dashboard() {
   const [usuario, setUsuario] = useState(null);
@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [slug, setSlug] = useState('');
   const [copiado, setCopiado] = useState('');
   const [cargando, setCargando] = useState(true);
+  const [mostrarEnlaceMod, setMostrarEnlaceMod] = useState(false); // Estado para ocultar/mostrar
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -188,15 +189,41 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* SECCIÓN DE INVITACIÓN A MODERADORES */}
+            {/* SECCIÓN DE INVITACIÓN A MODERADORES (OCULTO POR SEGURIDAD) */}
             <div className="border-t border-zinc-800 pt-6 space-y-4">
-              <div className="bg-purple-950/30 p-4 rounded-xl border border-purple-800/40">
-                <p className="text-xs font-semibold text-purple-300 mb-1 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4" /> Enlace de Invitación para Moderadores:
-                </p>
+              <div className="bg-amber-950/20 p-4 rounded-xl border border-amber-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" /> Enlace de Invitación para Moderadores:
+                  </p>
+                  <button
+                    onClick={() => setMostrarEnlaceMod(!mostrarEnlaceMod)}
+                    className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition"
+                  >
+                    {mostrarEnlaceMod ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    {mostrarEnlaceMod ? 'Ocultar Enlace' : 'Mostrar Enlace'}
+                  </button>
+                </div>
+
+                {/* Advertencia de seguridad */}
+                <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg text-amber-200 text-[11px]">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <span><strong>Advertencia:</strong> No muestres este enlace en directo. Cualquier persona que entre podrá registrarse como moderador de tu canal.</span>
+                </div>
+
+                {/* Input condicional (Oculto o Visible) */}
                 <div className="flex gap-2">
-                  <input readOnly value={`${window.location.origin}/invitacion/${canal.slug}`} className="bg-zinc-950 p-2.5 text-xs rounded-lg border border-zinc-800 flex-1 text-zinc-300 font-mono" />
-                  <button onClick={() => copiarTexto(`${window.location.origin}/invitacion/${canal.slug}`, 'invitacion')} className="bg-zinc-800 hover:bg-zinc-700 p-2.5 rounded-lg">
+                  <input
+                    type={mostrarEnlaceMod ? "text" : "password"}
+                    readOnly
+                    value={`${window.location.origin}/invitacion/${canal.slug}`}
+                    className="bg-zinc-950 p-2.5 text-xs rounded-lg border border-zinc-800 flex-1 text-zinc-300 font-mono tracking-widest"
+                  />
+                  <button
+                    onClick={() => copiarTexto(`${window.location.origin}/invitacion/${canal.slug}`, 'invitacion')}
+                    className="bg-zinc-800 hover:bg-zinc-700 p-2.5 rounded-lg"
+                    title="Copiar Enlace"
+                  >
                     {copiado === 'invitacion' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
