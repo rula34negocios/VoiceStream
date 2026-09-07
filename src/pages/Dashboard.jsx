@@ -38,7 +38,6 @@ export default function Dashboard() {
 
   const asegurarPerfilYCanal = async (user) => {
     try {
-      // 1. Verificar si existe el perfil, si no, crearlo manualmente
       const { data: perfilExistente } = await supabase
         .from('perfiles')
         .select('*')
@@ -54,7 +53,6 @@ export default function Dashboard() {
         ]);
       }
 
-      // 2. Cargar canal si ya lo creó
       const { data: canalData } = await supabase
         .from('canales')
         .select('*')
@@ -69,10 +67,13 @@ export default function Dashboard() {
     }
   };
 
+  // Corregido: Redirigir a la raíz del sitio
   const iniciarSesionTwitch = () => {
     supabase.auth.signInWithOAuth({
       provider: 'twitch',
-      options: { redirectTo: window.location.origin + '/dashboard' }
+      options: { 
+        redirectTo: window.location.origin
+      }
     });
   };
 
